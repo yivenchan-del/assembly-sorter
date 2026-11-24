@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>装配排版 v2.0</title>
+    <script src="/static/vue.global.js"></script>
+    <script src="/static/html2canvas-pro.js"></script>
+    <script src="/static/tailwind.js"></script>
+    <style>
+        /* 外层卡片严格保持 7:4 黄金宽高比 */
+        .aspect-card {
+            aspect-ratio: 7 / 4;
+        }
+
+        /* 单个格子保持 95:150 比例 */
+        .aspect-slot {
+            aspect-ratio: 95 / 150;
+        }
+
+        /* 隐藏滚动条但允许滚动 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen p-4 md:p-6 font-sans antialiased selection:bg-blue-500 selection:text-white" @click="focusInput">
+    <div id="app" class="max-w-[1920px] mx-auto relative w-full">
+        
+        <!-- 全局 Toast 提示组件 -->
+        <transition enter-active-class="transition duration-300 ease-out" 
+                    enter-from-class="opacity-0 -translate-y-2" 
+                    enter-to-class="opacity-100 translate-y-0" 
+                    leave-active-class="transition duration-200 ease-in" 
+                    leave-from-class="opacity-100 translate-y-0" 
+                    leave-to-class="opacity-0 -translate-y-2">
+            <div v-if="toastMsg" class="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900/90 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-lg backdrop-blur flex items-center gap-2">
+                <span>📋</span> {{ toastMsg }}
+            </div>
+        </transition>
+
+        <!-- 顶部控制面板 -->
+        <header class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 md:p-5 mb-6 backdrop-blur-md">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                
+                <!-- 左侧：标题与模式指示器 -->
+                <div class="flex items-center gap-4">
+                    <div class="p-3 bg-blue-600 rounded-xl text-white shadow-md shadow-blue-500/20">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h1 class="text-xl font-bold text-slate-900 tracking-tight">装配排版v2.0</h1>
+                            <span class="text-xs font-mono px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md font-semibold border border-slate-200">v2.0</span>
+                        </div>
+                        <div class="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-3">
+                            <span class="flex items-center gap-1.5 font-medium">
+                                <span class="w-2 h-2 rounded-full animate-ping" :class="mode === 'scan_pb' ? 'bg-blue-500' : 'bg-red-500'"></span>
+                                状态: 
+                                <span class="font-bold" :class="mode === 'scan_pb' ? 'text-blue-600' : 'text-red-600'">
+                                    {{ mode === 'scan_pb' ? '请扫描 PB 二维码' : '请扫描物料 SKU' }}
+                                </span>
+                            </span>
+                            <span v-if="lastScannedSku" class="inline-flex items-center gap-1 bg-amber-50 text-amber-900 px-2.5 py-0.5 rounded-full border border-amber-200/80 font-mono text-[11px]">
+                                <span class="text-amber-500">📌</span> 当前物料: <strong class="text-amber-700 font-bold">{{ lastScannedSku }}</strong>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 中间：操作人员录入与批量结算 -->
+                <div class="flex flex-wrap items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200/60">
+                    <div class="relative flex items-center">
+                        <input
+                            v-model="nameInput"
+                            type="text"
+                            placeholder="输入操作员姓名..."
+                            class="text-xs border border-slate-300 rounded-lg pl-3 pr-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 w-36 transition"
+                        />
+                    </div>
+                    <button @click="confirmName" class="bg-slate-800 hover:bg-slate-900 active:scale-95 text-white font-medium text-xs px-3 py-1.5 rounded-lg shadow-sm transition">
+                        确认
+                    </button>
+                    <button @click="resetName" class="text-slate-500 hover:text-rose-600 text-xs px-2 py-1.5 transition">
+                        重置
+                    </button>
+                    
+                    <div class="h-4 w-px bg-slate-300 mx-1"></div>
+
+                    <span v-if="savedName" class="inline-flex items-center gap-1 text-xs font-semibold text-slate-700 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-2xs">
+                        <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                        {{ savedName }}
+                    </span>
+                    <span v-else class="text-xs text-slate-400 italic px-1">未登录人员</span>
+
+                    <button @click="complete_eligible_batches()" 
+                            class="bg-red-600 hover:bg-red-700 active:scale-95 text-white font-medium text-xs px-3.5 py-1.5 rounded-lg shadow-sm hover:shadow transition flex items-center gap-1.5 ml-auto">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        一键完成已排版 PB
+                    </button>
+                </div>
+
+                <!-- 右侧：扫码输入框与全局重置 -->
+                <div class="flex items-center gap-3">
+                    <div class="relative flex-1 sm:w-64">
+                        <input ref="scanInput" v-model="scanInput" @keyup.enter="handleScan" 
+                               placeholder="等待扫码枪输入..." 
+                               class="w-full pl-9 pr-3 py-2 bg-slate-50 border-2 border-blue-500/80 rounded-xl text-xs font-mono font-semibold placeholder:font-normal placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/15 focus:bg-white transition shadow-inner">
+                        <svg class="w-4 h-4 text-blue-500 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
+                        </svg>
+                    </div>
+
+                    <button @click="resetAll" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1 shrink-0">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        重置全场
+                    </button>
+                </div>
+
+            </div>
+        </header>
+
+        <!-- 主布局：固定 10 个物理工位网格 -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-3 gap-5 w-full">
+            
+            <!-- 循环固定渲染 1 到 10 号物理灯板卡位 (7:4 卡片) -->
+            <div v-for="boardAddr in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]" :key="boardAddr"
+                 class="transition-all duration-300 rounded-2xl border aspect-card overflow-hidden p-3.5 bg-white shadow-sm hover:shadow-md relative flex flex-col justify-between"
+                 :class="getBoardCardByAddr(boardAddr) ? 'border-slate-200' : 'bg-slate-50/50 border-dashed border-slate-300/80'">
+
+                <!-- 1. 情况一：该物理灯板已经绑定了 PB -->
+                <template v-if="getBoardCardByAddr(boardAddr)">
+                    <div class="flex flex-col h-full justify-between gap-2">
+                        
+                        <!-- 1️⃣ 头部栏：PB号 + 灯板编号 + 操作按钮 -->
+                        <div class="flex justify-between items-center pb-2 border-b border-slate-100 gap-1">
+                            <div class="flex items-center gap-1.5 truncate max-w-[60%]">
+                                <span class="text-[10px] bg-slate-900 text-white px-1.5 py-0.5 rounded font-mono font-bold shrink-0">
+                                    #{{ boardAddr }}
+                                </span>
+                                <a :href="getPortalUrl(getBoardCardByAddr(boardAddr).iid)" target="_blank" 
+                                   class="font-bold text-xs text-slate-800 hover:text-blue-600 underline decoration-blue-300/60 truncate font-mono"
+                                   :title="getBoardCardByAddr(boardAddr).pb_id">
+                                    {{ getBoardCardByAddr(boardAddr).pb_id }}
+                                    <span :title="getBoardCardByAddr(boardAddr).slots">{{ getBoardCardByAddr(boardAddr).slots[0].batch_no }}</span>
+                                </a>
+                            </div>
+
+                            <div class="flex items-center gap-1 shrink-0">
+                                <button @click="reset_pb(getBoardCardByAddr(boardAddr).pb_id)" 
+                                        title="重置当前卡片"
+                                        class="text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1 rounded-md transition">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                </button>
+                                
+                                <button @click="finishSinglePB(getBoardCardByAddr(boardAddr).pb_id)" 
+                                        class="bg-red-500 hover:bg-red-600 active:scale-95 text-white font-medium text-[11px] px-2.5 py-1 rounded-lg shadow-2xs hover:shadow transition flex items-center gap-1">
+                                    <span>✓</span> 完成
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 2️⃣ 2行6列 矩阵区域：充盈撑满卡片剩余空间 -->
+                        <div class="grid grid-cols-6 gap-1 bg-slate-50/80 p-1.5 rounded-xl border border-slate-100 items-center my-auto h-full max-h-[82%]">
+                            <!-- 💡 在此处绑定了 @dblclick.stop 双击复制事件，并加入 cursor-pointer 提示 -->
+                            <div v-for="(slot, idx) in getBoardCardByAddr(boardAddr).slots" :key="idx" 
+                                 @dblclick.stop="copySkuText(slot.sku)"
+                                 :title="slot.sku && slot.sku !== '---' && slot.sku !== '空位' ? `双击复制 SKU: ${slot.sku}` : ''"
+                                 :class="['aspect-slot border rounded-lg text-center flex flex-col justify-between items-center p-1 transition-all duration-200 shadow-2xs relative overflow-hidden h-full cursor-pointer select-none', getStatusClass(slot.status,slot.is_ring_stand)]">
+                                
+                                <!-- 序号脚标 -->
+                                <span class="text-[8px] font-mono leading-none opacity-40 font-bold self-start">
+                                    L{{ idx+1 }}
+                                </span>
+                                
+                                <!-- SKU 文本格式化居中 -->
+                                <div class="w-full text-[9px] font-bold leading-tight break-words my-auto tracking-tighter" 
+                                     v-html="formatSkuDisplay(slot.sku,slot.sku_desc,slot.is_ring_stand)">
+                                </div>
+
+                                <!-- 状态指示点 -->
+                                <!-- 状态指示点 -->
+                                <div class="w-2 h-2 rounded-full self-end" 
+                                     :class="{
+                                         'bg-amber-600 animate-ping': slot.status === 'active',
+                                         'bg-red-600': slot.status === 'scanned',
+                                         'bg-slate-300': slot.status === 'empty',
+                                         'bg-slate-200': slot.status === 'block'
+                                     }">
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </template>
+
+                <!-- 2. 情况二：物理灯板空闲占位槽 -->
+                <template v-else>
+                    <div class="h-full flex flex-col justify-center items-center text-slate-400 border border-dashed border-slate-200 rounded-xl bg-slate-50/40 p-2 text-center group hover:border-slate-300 transition">
+                        <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center mb-1.5 text-slate-400 text-xs font-mono font-bold group-hover:scale-110 transition">
+                            #{{ boardAddr }}
+                        </div>
+                        <div class="font-semibold text-xs text-slate-500">盘位空闲</div>
+                        <div class="text-[10px] text-slate-400 mt-0.5">扫 PB 二维码接入</div>
+                    </div>
+                </template>
+
+            </div>
+        </div>
+
+        <!-- 没有卡片时的占位提示 -->
+        <div v-if="Object.keys(pbList).length === 0" class="text-center py-12 bg-white rounded-2xl shadow-sm border border-slate-200/80 mt-6 max-w-xl mx-auto">
+            <div class="w-12 h-12 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            </div>
+            <h3 class="text-slate-800 font-bold text-sm">暂无活跃的 PB 卡片</h3>
+            <p class="text-slate-400 text-xs mt-1">请使用扫码枪扫描第一个 PB 二维码以启动工作流</p>
+        </div>
+
+        <!-- ==================== 🛠️ 影子截图容器 ==================== -->
+        <div class="absolute left-[-9999px] top-0">
+            <div id="screenshot-target" class="w-[800px] bg-white p-8 rounded-2xl border-2 border-slate-200 shadow-xl" v-if="screenshotData">
+                <div class="flex justify-between items-center mb-6 border-b pb-4">
+                    <div>
+                        <span class="text-xs text-slate-400 font-bold block mb-1">PB 排版留底记录</span>
+                        <span class="font-bold text-2xl text-slate-800 font-mono">{{ screenshotData.pbId }}</span>
+                    </div>
+                    <span class="text-xs font-semibold px-2.5 py-1 bg-red-50 text-red-700 rounded-lg border border-red-200">已完成全部排版</span>
+                </div>
+                <div class="grid grid-cols-6 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    <div v-for="(slot, idx) in screenshotData.slots" :key="idx" 
+                         class="aspect-slot p-2 border-2 border-red-400 bg-red-50/60 text-red-950 rounded-xl text-center flex flex-col justify-between items-center shadow-2xs">
+                        <span class="text-[10px] text-red-600 font-mono font-bold self-start">#{{ idx+1 }}</span>
+                        <span class="font-mono font-bold text-xs block w-full break-all my-auto" v-html="formatSkuDisplay(slot.sku,slot.sku_desc,slot.is_ring_stand)"></span>
+                        <span class="text-[9px] font-semibold text-red-600 bg-red-100/80 px-1.5 py-0.5 rounded">已排版</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+<script>
+const { createApp } = Vue;
+const BASE_API = 'http://localhost:8088/api';
+
+createApp({
+    name: "NameInputBox",
+    data() {
+        return {
+            scanInput: '',
+            mode: 'scan_pb',
+            lastScannedSku: '',
+            pbList: {},
+            screenshotData: null,
+            nameInput: "",
+            savedName: "",
+            toastMsg: "" // 新增：控制顶部弹窗提示
+        }
+    },
+    async mounted() {
+        this.focusInput();
+        await this.syncActivePBs();
+        // 页面加载时读取 localStorage
+        const stored = localStorage.getItem("username");
+        if (stored) {
+            this.savedName = stored;
+        }
+    },
+    methods: {
+        showToast(msg) {
+            this.toastMsg = msg;
+            setTimeout(() => {
+                this.toastMsg = "";
+            }, 2000);
+        },
+
+        // 双击复制 SKU
+        async copySkuText(sku) {
+            if (!sku || sku === '---' || sku === '空位') {
+                this.showToast("该位置为空，无需复制");
+                return;
+            }
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(sku);
+                } else {
+                    // 兼容降级逻辑
+                    const textArea = document.createElement("textarea");
+                    textArea.value = sku;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand("copy");
+                    document.body.removeChild(textArea);
+                }
+                this.matchGlobalSKU(sku);
+                this.showToast(`已复制 SKU: ${sku}`);
+                this.focusInput();
+            } catch (err) {
+                console.error("复制失败:", err);
+                this.showToast("复制失败，请重试");
+            }
+        },
+
+        confirmName() {
+            if (this.nameInput.trim()) {
+                this.savedName = this.nameInput.trim();
+                localStorage.setItem("username", "装配-".concat(this.savedName));
+                this.nameInput = "";
+            }
+        },
+        resetName() {
+            this.savedName = "";
+            localStorage.removeItem("username");
+        },
+        focusInput() {
+            this.$nextTick(() => {
+                if (this.$refs.scanInput) {
+                    this.$refs.scanInput.focus();
+                }
+            });
+        },
+
+        getBoardCardByAddr(boardAddr) {
+            for (const pbId in this.pbList) {
+                if (this.pbList[pbId].board_addr === boardAddr) {
+                    return this.pbList[pbId];
+                }
+            }
+            return null;
+        },
+
+        formatSkuDisplay(sku,sku_desc,is_ring_stand) {
+            if (!sku || sku === '---' || sku === '空位') return `<span class="text-slate-300 font-normal">空位</span>`;
+            const hasNumber = /Ultra/.test(sku_desc);
+            let parts = sku.split('-');
+            if (parts.length >= 4) {
+                let firstPart = parts.slice(0, 3).join('-');
+                let restPart = parts.slice(3).join('-');
+                if (is_ring_stand && hasNumber) {
+                    return `<span class="text-slate-800 font-medium tracking-tighter">${firstPart}-</span><span class="text-[13px] block font-black font-medium text-slate-500 leading-none mt-0.5 break-all">${restPart}</span><span class="text-slate-800 font-medium tracking-tighter">加强-</span><span class="text-slate-800 font-medium tracking-tighter">支架</span>`;   
+                }
+                if (hasNumber) {
+                    return `<span class="text-slate-800 font-medium tracking-tighter">${firstPart}-</span><span class="text-[13px] block font-black font-medium text-slate-500 leading-none mt-0.5 break-all">${restPart}</span><span class="text-slate-800 font-medium tracking-tighter">加强</span>`;
+                }
+                if (is_ring_stand) {
+                    return `<span class="text-slate-800 font-medium tracking-tighter">${firstPart}-</span><span class="text-[13px] block font-black font-medium text-slate-500 leading-none mt-0.5 break-all">${restPart}</span><span class="text-slate-800 font-medium tracking-tighter">支架</span>`;
+                }
+
+                return `<span class="text-slate-800 font-medium tracking-tighter">${firstPart}-</span><span class="text-[13px] block font-black font-medium text-slate-500 leading-none mt-0.5 break-all">${restPart}</span>`;
+            }
+            return sku;
+        },
+
+        async syncActivePBs() {
+            try {
+                const res = await fetch(`${BASE_API}/active_pbs`);
+                if (res.ok) {
+                    const data = await res.json();
+                    this.pbList = data.active_pbs || {};
+                    if (Object.keys(this.pbList).length > 0) {
+                        this.mode = 'scan_sku';
+                    }
+                }
+            } catch (e) {
+                console.error("同步全场状态失败:", e);
+            }
+        },
+
+        handleScan() {
+            const code = this.scanInput.trim();
+            const pbregex = /^\d{6}$/;
+            const skuregex = /^CTF-[A-Z]-[A-Z]{3}-.*$/;
+            const wcregex = /^complete_eligible_batches$/;
+            if (!code) return;
+
+            if (pbregex.test(code)) {
+                this.loadPB(code);
+            } else if (skuregex.test(code)) {
+                this.matchGlobalSKU(code);
+            } else if (wcregex.test(code)) {
+                this.complete_eligible_batches(code);
+            }
+              else {
+                this.showToast(`⚠️ 格式错误: [${code}] 不符合标准编码规范！`);
+            }
+            this.scanInput = ''; 
+            this.focusInput();
+        },
+
+        async loadPB(pbId) {
+            if (this.pbList[pbId]) {
+                this.showToast(`提示: PB [${pbId}] 已在列表中，无需重复扫描`);
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${BASE_API}/pb/${pbId}`);
+                if (!response.ok) {
+                    const errData = await response.json();
+                    this.showToast(`⚠️ 错误: ${errData.detail || '无法获取该 PB 信息'}`);
+                    return;
+                }
+                
+                await this.syncActivePBs();
+                this.mode = 'scan_sku';
+                
+            } catch (error) {
+                console.error("请求 PB 数据失败:", error);
+                this.showToast("❌ 网络请求失败，请检查后端服务");
+            }
+        },
+
+        async matchGlobalSKU(sku) {
+            this.lastScannedSku = sku;
+            
+            try {
+                const response = await fetch(`${BASE_API}/match_sku`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ sku: sku })
+                });
+                
+                const data = await response.json();
+                
+                if (data.full_data) {
+                    this.pbList = data.full_data;
+                }
+                
+                if (data.status === 'not_found') {
+                    this.showToast(`⚠️ ${data.message || '没有找到需要该物料的空闲格子！'}`);
+                }
+            } catch (error) {
+                console.error("物料匹配请求失败:", error);
+                this.showToast("❌ 匹配请求失败，请检查后端网络");
+            }
+        },
+        async complete_eligible_batches() {
+            this.showToast("确定要一键结算所有【已完全填满物料】的 PB 卡片吗？（未填满的卡片将自动保留）");
+
+            try {
+                const response = await fetch(`${BASE_API}/complete_eligible_batches`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ name:this.savedName})
+                });
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    this.showToast(`✅ ${data.message}`);
+                    this.pbList = data.full_data || {};
+                    this.focusInput();
+                    if (Object.keys(this.pbList).length === 0) {
+                        this.mode = 'scan_pb';
+                        this.lastScannedSku = '';
+                        this.focusInput();
+                    }
+                } else {
+                    this.showToast(`⚠️ ${data.message}`);
+                }
+            } catch (error) {
+                console.error("一键结算请求失败:", error);
+                this.showToast("❌ 操作失败，请检查网络");
+            }
+        },
+        async finishSinglePB(pbId) {
+            const currentPB = this.pbList[pbId];
+            if (!currentPB) return;
+
+            const hasEmptySlot = currentPB.slots.some(slot => slot.status === 'empty');
+            if (hasEmptySlot) {
+                this.showToast(`⚠️ 该 PB 还有空闲格子未填充物料，无法提交排版！`);
+                return;
+            }
+
+            this.screenshotData = {
+                pbId: pbId,
+                slots: JSON.parse(JSON.stringify(currentPB.slots))
+            };
+
+            this.$nextTick(async () => {
+                try {
+                    const el = document.getElementById('screenshot-target');
+                    const canvas = await html2canvas(el, { scale: 1, logging: false });
+                    const base64 = canvas.toDataURL("image/png");
+
+                    const response = await fetch(`${BASE_API}/save_png`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ pb_id: pbId, name:this.savedName, image_base64: base64 })
+                    });
+
+                    if (response.ok) {
+                        const resData = await response.json();
+                        this.pbList = resData.active_pbs || {};
+                        this.screenshotData = null;
+                        this.focusInput();
+                        if (Object.keys(this.pbList).length === 0) {
+                            this.mode = 'scan_pb';
+                            this.lastScannedSku = '';
+                            this.focusInput();
+                        }
+                        this.showToast(" 后端保存图片/完成排版成功");
+                    } else {
+                        this.showToast("❌ 后端保存图片/完成排版失败");
+                    }
+                } catch (error) {
+                    console.error("截图提交异常:", error);
+                }
+            });
+        },
+
+        async resetAll() {
+            if (!confirm("⚠️ 确定要重置全场吗？这将熄灭所有物理灯板并清空所有当前排版！")) return;
+            try {
+                await fetch(`${BASE_API}/reset_all`, { method: 'POST' });
+                this.pbList = {};
+                this.mode = 'scan_pb';
+                this.lastScannedSku = '';
+                this.focusInput();
+            } catch (e) {
+                console.error("重置失败:", e);
+            }
+        },
+        async reset_pb(pbId) {
+            if (!confirm(`⚠️ 确定要重置吗？这将熄灭并清空 ${pbId} 排版！`)) return;
+            try {
+                const response = await fetch(`${BASE_API}/reset_pb/${pbId}`);
+                if (response.ok) {
+                    const resData = await response.json();
+                    this.pbList = resData.active_pbs || {};
+                    this.screenshotData = null;
+                    this.focusInput();
+                    if (Object.keys(this.pbList).length === 0) {
+                        this.mode = 'scan_pb';
+                        this.lastScannedSku = '';
+                        this.focusInput();
+                    }
+                } else {
+                    this.showToast("❌ 后端重置失败");
+                }
+            } catch (e) {
+                console.error("重置失败:", e);
+            }
+        },
+
+        getPortalUrl(iid) {
+            if (!iid) return '#';
+            return iid.startsWith('http') ? iid : `https://mps-v1-portal.casetify.com/#/printing-batch/${iid}`;
+        },
+
+        getStatusClass(status,is_ring_stand) {
+            // 1. active (当前目标/匹配成功): 高亮闪烁绿 + 强扩散光晕 + 放大微动，最高视觉优先级
+            if (status === 'active') {
+                if (is_ring_stand === true)
+                    return 'bg-red-400 border-2 border-red-600 text-slate-950 font-black ring-4 ring-red-300/90 animate-pulse scale-[1.05] z-10 shadow-lg';
+                return 'bg-emerald-400 border-2 border-emerald-600 text-slate-950 font-black ring-4 ring-emerald-300/90 animate-pulse scale-[1.05] z-10 shadow-lg';
+            }
+
+            // 2. scanned (已完成排版): 深邃蓝灰底 + 靛蓝边框 + 蓝黑字，代表稳定归位
+            if (status === 'scanned') {
+                if (is_ring_stand === true)
+                    return 'bg-red-50 border-2 border-red-400 text-red-950 font-bold shadow-2xs';
+                return 'bg-yellow-50 border-2 border-yellow-400 text-yellow-950 font-bold shadow-2xs';
+            }
+
+            // 3. empty (待排版空位): 纯白底 + 高对比灰线 + 深灰色字，轮廓清晰
+            if (status === 'empty') {
+                return 'bg-white border-2 border-slate-300 text-slate-800 font-medium hover:border-slate-400 hover:bg-slate-50';
+            }
+
+            // 4. block (占位/无效槽位): 虚线 + 淡灰背景，视觉弱化
+            if (status === 'block') {
+                return 'bg-slate-100/80 border border-dashed border-slate-300 text-slate-400 opacity-60';
+            }
+
+            return 'bg-white border border-slate-200 text-slate-600';
+        }
+    }
+}).mount('#app')
+</script>
+</body>
+</html>

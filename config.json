@@ -1,0 +1,33 @@
+{
+    "serial": {
+        "enabled": false,
+        "port": "COM3",
+        "baud_rate": 9600,
+        "timeout": 1
+    },
+    "app": {
+        "host": "127.0.0.1",
+        "port": 8088,
+        "api_base_url": "https://mps.casetify.com/api/printing_batch",
+        "ship_api_base_url": "https://mps.casetify.com/api/shipping_task",
+        "assembly_task_api": "https://mps.casetify.com/api/assembly_task",
+        "API_HISTORY_URL": "https://mps.casetify.com/api/printing_task",
+        "image_dir": "saved_images"
+    },
+    "hardware": {
+        "available_boards": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+        ]
+    }
+}
