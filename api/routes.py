@@ -13,7 +13,7 @@ from ..models.schemas import TokenModel, SkuMatchModel, SaveImageData,UserData
 from ..services.state_store import state_store
 from ..services.cloud_service import fetch_internal_id_from_cloud, fetch_slots_info_from_cloud,fetch_accembly_slots_info_from_cloud,fetch_printing_id_from_barcode_cloud
 from ..utils.serial_hardware import send_hardware_command
-from ..utils.printer import print_qr_code
+# from ..utils.printer import print_qr_code
 from ..utils.printing_assembly_slot_sorter import printing_assembly_slot_sorter,printing_assembly_slot_sorter_legacy_fixed
 from ..config import EXE_DIR, IMAGE_DIR, INDEX_HTML_PATH
 
@@ -44,7 +44,6 @@ async def get_pb_info(pb_id: str):
 
     if pb_id in state_store.active_pb_list:
         return state_store.active_pb_list[pb_id]
-
     logging.info(f"正在向云端查询 PB: {pb_id}")
     iid = ''
     iid = fetch_printing_id_from_barcode_cloud(pb_id)
@@ -67,7 +66,7 @@ async def get_pb_info(pb_id: str):
         state_store.release_board(pb_id)
         raise HTTPException(status_code=404, detail=f"未找到该 PB [{pb_id}] 的内部 IID")
     # print('assembly_tasks',assembly_tasks)
-    print('slots_data',slots_data)
+    # print('slots_data',slots_data)
 
     fnish_slots = printing_assembly_slot_sorter(assembly_tasks,slots_data)
     if not fnish_slots:
@@ -237,8 +236,8 @@ async def save_screenshot_and_finish(data: SaveImageData):
 
         # if pb_id in state_store.active_pb_list:
         #     state_store.active_pb_list.pop(pb_id)
-        if boraddr is not None:
-            print_qr_code(pb_id, uname, boraddr)
+        # if boraddr is not None:
+        #     print_qr_code(pb_id, uname, boraddr)
 
         return {"status": "success", "file_path": file_path, "active_pbs": state_store.active_pb_list}
     except Exception as e:
@@ -305,7 +304,7 @@ async def complete_eligible_batches(data: UserData):
             # await archive_and_release_pb(p_id)
             board_addr = state_store.release_board(p_id)
             if board_addr is not None:
-                print_qr_code(p_id, name, board_addr)
+                # print_qr_code(p_id, name, board_addr)
                 state_store.release_board(p_id)
             # time.sleep(0.2)
             logging.info(f"🎉 [一键完成] PB [{p_id}] 已满足全填满条件，完成自动排版并释放灯板 #{board_addr}")

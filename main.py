@@ -6,8 +6,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from assembly_sorter_project.config import CONFIG, STATIC_DIR_PATH
-from assembly_sorter_project.api.routes import router
+from assembly_sorter.config import CONFIG, STATIC_DIR_PATH
+from assembly_sorter.api.routes import router
 
 # 🌟 修复 1：在无控制台(--noconsole)打包模式下，防止 sys.stdout/stderr 为 None 导致崩溃
 if sys.stdout is None:

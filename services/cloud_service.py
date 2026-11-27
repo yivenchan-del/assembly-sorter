@@ -118,8 +118,8 @@ def fetch_slots_info_from_cloud(iid: str) -> Optional[List[Dict[str, Any]]]:
         slot_mark = 1
         printing_task_id = ''
         for slot in slots:
-            if slot_mark > slot_limit:
-                break
+            # if slot_mark > slot_limit:
+            #     break
             if not isinstance(slot, dict):
                 # 遇到异常元素，追加默认空位
                 slots_info_list.append(create_default_printing_slot(batch_no,station_name))
@@ -163,7 +163,18 @@ def fetch_slots_info_from_cloud(iid: str) -> Optional[List[Dict[str, Any]]]:
             })
             rejected_reason = ''
             slot_mark +=1
-        
+        if len(slots_info_list) > 12:
+
+            emp_all = True
+
+            for slot in slots_info_list[12:25]:
+                if slot.get('sku') != '空位':
+                    emp_all = False
+                    break
+
+            if emp_all:
+                return slots_info_list[:12]
+
         return slots_info_list
 
     except Exception as e:
@@ -300,7 +311,6 @@ def fetch_npp(iid: str, printing_task_iid: str) -> str | None:
 
         url = f"{API_HISTORY_URL}/{printing_task_iid}/history"
         headers = {
-            # 注意：通常标准的 Bearer Token 需要加前缀，如果服务端确实只收纯 token 请保留原样
             "Authorization": f"{state_store.current_token}",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             # GET 请求不需要 Content-Type，建议保留 Accept

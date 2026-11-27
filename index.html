@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>装配排版 v2.0</title>
+    <title>装配排版 v3.0</title>
     <script src="/static/vue.global.js"></script>
     <script src="/static/html2canvas-pro.js"></script>
     <script src="/static/tailwind.js"></script>
@@ -127,16 +127,24 @@
         </header>
 
         <!-- 主布局：固定 10 个物理工位网格 -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-3 gap-5 w-full">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-5 w-full">
             
             <!-- 循环固定渲染 1 到 10 号物理灯板卡位 (7:4 卡片) -->
-            <div v-for="boardAddr in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]" :key="boardAddr"
-                 class="transition-all duration-300 rounded-2xl border aspect-card overflow-hidden p-3.5 bg-white shadow-sm hover:shadow-md relative flex flex-col justify-between"
-                 :class="getBoardCardByAddr(boardAddr) ? 'border-slate-200' : 'bg-slate-50/50 border-dashed border-slate-300/80'">
+            <div
+            v-for="boardAddr in [1,2,3,4,5,6,7,8,9,10]"
+            :key="boardAddr"
+            :class="[
+            'transition-all duration-300 rounded-2xl border overflow-hidden p-3.5 bg-white shadow-sm hover:shadow-md relative flex flex-col',
+
+            getBoardCardByAddr(boardAddr)?.slots?.length === 25
+            ? 'lg:col-span-3 xl:col-span-3 min-h-[300px]'
+            : 'aspect-card'
+            ]"
+            >
 
                 <!-- 1. 情况一：该物理灯板已经绑定了 PB -->
                 <template v-if="getBoardCardByAddr(boardAddr)">
-                    <div class="flex flex-col h-full justify-between gap-2">
+                    <div class="flex flex-col h-full gap-2">
                         
                         <!-- 1️⃣ 头部栏：PB号 + 灯板编号 + 操作按钮 -->
                         <div class="flex justify-between items-center pb-2 border-b border-slate-100 gap-1">
@@ -167,34 +175,164 @@
                         </div>
 
                         <!-- 2️⃣ 2行6列 矩阵区域：充盈撑满卡片剩余空间 -->
-                        <div class="grid grid-cols-6 gap-1 bg-slate-50/80 p-1.5 rounded-xl border border-slate-100 items-center my-auto h-full max-h-[82%]">
-                            <!-- 💡 在此处绑定了 @dblclick.stop 双击复制事件，并加入 cursor-pointer 提示 -->
-                            <div v-for="(slot, idx) in getBoardCardByAddr(boardAddr).slots" :key="idx" 
-                                 @dblclick.stop="copySkuText(slot.sku)"
-                                 :title="slot.sku && slot.sku !== '---' && slot.sku !== '空位' ? `双击复制 SKU: ${slot.sku}` : ''"
-                                 :class="['aspect-slot border rounded-lg text-center flex flex-col justify-between items-center p-1 transition-all duration-200 shadow-2xs relative overflow-hidden h-full cursor-pointer select-none', getStatusClass(slot.status,slot.is_ring_stand)]">
-                                
-                                <!-- 序号脚标 -->
-                                <span class="text-[8px] font-mono leading-none opacity-40 font-bold self-start">
-                                    L{{ idx+1 }}
-                                </span>
-                                
-                                <!-- SKU 文本格式化居中 -->
-                                <div class="w-full text-[9px] font-bold leading-tight break-words my-auto tracking-tighter" 
-                                     v-html="formatSkuDisplay(slot.sku,slot.sku_desc,slot.is_ring_stand)">
+                        <!-- 槽位区域 -->
+                        <div
+                        class="flex-1 bg-slate-50/80 p-3 rounded-xl border border-slate-100 flex flex-col justify-center -translate-y-4"
+                        >
+
+                            <!-- ================= 12槽模板 ================= -->
+                            <template v-if="getBoardCardByAddr(boardAddr).slots.length === 12">
+
+                                <div class="grid grid-cols-6 gap-1 h-full">
+
+                                    <div
+                                        v-for="(slot, idx) in getBoardCardByAddr(boardAddr).slots"
+                                        :key="idx"
+                                        @dblclick.stop="copySkuText(slot.sku)"
+                                        :title="slot.sku && slot.sku !== '---' && slot.sku !== '空位'
+                                            ? `双击复制 SKU: ${slot.sku}`
+                                            : ''"
+                                        :class="[
+                                            'aspect-slot border rounded-lg text-center flex flex-col justify-between items-center p-1 transition-all duration-200 shadow-2xs relative overflow-hidden h-full cursor-pointer select-none',
+                                            getStatusClass(slot.status,slot.is_ring_stand)
+                                        ]"
+                                    >
+
+                                        <span class="text-[8px] font-mono leading-none opacity-40 font-bold self-start">
+                                            L{{ idx+1 }}
+                                        </span>
+
+                                        <div
+                                            class="w-full text-[9px] font-bold leading-tight break-words my-auto tracking-tighter"
+                                            v-html="formatSkuDisplay(slot.sku,slot.sku_desc,slot.is_ring_stand)"
+                                        ></div>
+
+                                        <div
+                                            class="w-2 h-2 rounded-full self-end"
+                                            :class="{
+                                                'bg-amber-600 animate-ping': slot.status === 'active',
+                                                'bg-red-600': slot.status === 'scanned',
+                                                'bg-slate-300': slot.status === 'empty',
+                                                'bg-slate-200': slot.status === 'block'
+                                            }"
+                                        ></div>
+
+                                    </div>
+
                                 </div>
 
-                                <!-- 状态指示点 -->
-                                <!-- 状态指示点 -->
-                                <div class="w-2 h-2 rounded-full self-end" 
-                                     :class="{
-                                         'bg-amber-600 animate-ping': slot.status === 'active',
-                                         'bg-red-600': slot.status === 'scanned',
-                                         'bg-slate-300': slot.status === 'empty',
-                                         'bg-slate-200': slot.status === 'block'
-                                     }">
+                            </template>
+
+                            <!-- ================= 25槽模板 ================= -->
+                            <template v-else-if="getBoardCardByAddr(boardAddr)?.slots?.length === 25
+    ? 'lg:col-span-2 xl:col-span-2 min-h-[320px]'
+    : 'aspect-card'">
+
+                                <!-- 第一行 -->
+                                <div class="grid grid-cols-13 gap-2 mb-4">
+
+                                    <!-- 左6 -->
+                                    <template
+                                        v-for="(slot, idx) in getBoardCardByAddr(boardAddr).slots.slice(0,6)"
+                                        :key="'top-left-'+idx"
+                                    >
+
+                                        <div
+                                            @dblclick.stop="copySkuText(slot.sku)"
+                                            :class="[
+                                                'h-[64px] border rounded-md text-center flex flex-col justify-between items-center p-0.5 overflow-hidden cursor-pointer',
+                                                getStatusClass(slot.status,slot.is_ring_stand)
+                                            ]"
+                                        >
+
+                                            <span class="text-[10px] opacity-40 font-bold self-start">
+                                                L{{ idx+1 }}
+                                            </span>
+
+                                            <div
+                                                class="w-full text-[7px] font-bold leading-tight break-all my-auto"
+                                                v-html="formatSkuDisplay(
+                                                    slot.sku,
+                                                    slot.sku_desc,
+                                                    slot.is_ring_stand
+                                                )"
+                                            ></div>
+
+                                        </div>
+
+                                    </template>
+
+                                    <!-- 中间空位 -->
+                                    <div
+                                        class="border border-dashed border-slate-200 rounded-md bg-slate-50 opacity-40"
+                                    ></div>
+
+                                    <!-- 右6 -->
+                                    <template
+                                        v-for="(slot, idx) in getBoardCardByAddr(boardAddr).slots.slice(6,12)"
+                                        :key="'top-right-'+idx"
+                                    >
+
+                                        <div
+                                            @dblclick.stop="copySkuText(slot.sku)"
+                                            :class="[
+                                                'h-[64px] border rounded-md text-center flex flex-col justify-between items-center p-0.5 overflow-hidden cursor-pointer',
+                                                getStatusClass(slot.status,slot.is_ring_stand)
+                                            ]"
+                                        >
+
+                                            <span class="text-[10px] opacity-40 font-bold self-start">
+                                                L{{ idx+7 }}
+                                            </span>
+
+                                            <div
+                                                class="w-full text-[7px] font-bold leading-tight break-all my-auto"
+                                                v-html="formatSkuDisplay(
+                                                    slot.sku,
+                                                    slot.sku_desc,
+                                                    slot.is_ring_stand
+                                                )"
+                                            ></div>
+
+                                        </div>
+
+                                    </template>
+
                                 </div>
-                            </div>
+
+                                <!-- 第二行13 -->
+                                <div class="grid grid-cols-13 gap-2">
+
+
+                                    <div
+                                        v-for="(slot, idx) in getBoardCardByAddr(boardAddr).slots.slice(12)"
+                                        :key="'row2-'+idx"
+                                        @dblclick.stop="copySkuText(slot.sku)"
+                                        :class="[
+                                            'h-[64px] border rounded-md text-center flex flex-col justify-between items-center p-0.5 overflow-hidden cursor-pointer',
+                                            getStatusClass(slot.status,slot.is_ring_stand)
+                                        ]"
+                                    >
+
+                                        <span class="text-[10px] opacity-40 font-bold self-start">
+                                            L{{ idx+13 }}
+                                        </span>
+
+                                        <div
+                                            class="w-full text-[7px] font-bold leading-tight break-all my-auto"
+                                            v-html="formatSkuDisplay(
+                                                slot.sku,
+                                                slot.sku_desc,
+                                                slot.is_ring_stand
+                                            )"
+                                        ></div>
+
+                                    </div>
+
+                                </div>
+
+                            </template>
+
                         </div>
 
                     </div>
