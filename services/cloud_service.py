@@ -25,33 +25,6 @@ def fetch_internal_id_from_cloud(pb_number: str) -> Optional[str]:
     except Exception as e:
         logging.error(f"❌ [IID 获取失败] PB {pb_number}: {e}")
     return None
-# def fetch_printing_id_from_barcode_cloud(bucket: str) ->Optional[str]:
-#     params_dict = {
-#         "barcode": bucket,
-#         "limit": 1,
-#         "offset": 0
-#     }
-#     headers = {
-#         "Authorization": f"{state_store.current_token}",
-#         "Content-Type": "application/json",
-#         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-#     }
-#     try:
-#         resp = requests.get(
-#             API_BASE_URL, 
-#             params={"params": json.dumps(params_dict,separators=(',', ':'))},
-#             headers=headers, timeout=10
-#         )
-#         resp.raise_for_status()
-#         task_node = resp.json()
-#         if not task_node:
-#             return None
-#         return task_node.get("data",[])[0].get("iid",'')
-
-#     except Exception as e:
-#         logging.error(f"❌ [装配排版信息获取失败]  {bucket}: {e}")
-    # return None
-
 
 def fetch_printing_id_from_barcode_cloud(bucket: str) -> Optional[str]:
     # 1. 构造 JSON 字符串（紧凑模式，剔除空格）
@@ -205,8 +178,7 @@ def create_default_slot(task_id: str = "Non_task") -> Dict[str, Any]:
         "printing_batch_iid":'',
         "assembly_status":''
     }
-# assembly_task[0].printing_task.printing_batch_iid
-# assembly_task[2].status
+
 def fetch_accembly_slots_info_from_cloud(iid: str) -> Optional[List[Dict[str, Any]]]:
 
     # 1. Define params as a standard Python dict
